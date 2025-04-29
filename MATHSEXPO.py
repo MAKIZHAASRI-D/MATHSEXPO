@@ -4,86 +4,91 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
 from sympy import sympify, lambdify
-import math
 
 # ---------------------------------------------
 # ODE Methods
 # ---------------------------------------------
-def f(x, y):
-    return x + y  # Example ODE: dy/dx = x + y
+def get_ode_function(expr):
+    """Convert string expression to a function f(x, y)"""
+    x, y = sp.symbols('x y')
+    f_expr = sympify(expr)
+    f_func = lambdify((x, y), f_expr, modules='numpy')
+    return f_func
 
-def taylor_series_method(x0, y0, h, n):
+def taylor_series_method(f, x0, y0, h, n):
     results = []
     for _ in range(n):
         f0 = f(x0, y0)
         y1 = y0 + h * f0
-        results.append((round(x0 + h, 4), round(y1, 4)))
+        results.append((x0 + h, y1))
         x0 += h
         y0 = y1
     return results
 
-def euler_method(x0, y0, h, n):
+def euler_method(f, x0, y0, h, n):
     results = []
     for _ in range(n):
-        y0 = round(y0 + h * f(x0, y0), 4)
-        x0 = round(x0 + h, 4)
+        y0 = y0 + h * f(x0, y0)
+        x0 = x0 + h
         results.append((x0, y0))
     return results
 
-def runge_kutta_method(x0, y0, h, n):
+def runge_kutta_method(f, x0, y0, h, n):
     results = []
     for _ in range(n):
         k1 = h * f(x0, y0)
         k2 = h * f(x0 + 0.5 * h, y0 + 0.5 * k1)
         k3 = h * f(x0 + 0.5 * h, y0 + 0.5 * k2)
         k4 = h * f(x0 + h, y0 + k3)
-        y0 = round(y0 + (k1 + 2 * k2 + 2 * k3 + k4) / 6, 4)
-        x0 = round(x0 + h, 4)
+        y0 = y0 + (k1 + 2 * k2 + 2 * k3 + k4) / 6
+        x0 = x0 + h
         results.append((x0, y0))
     return results
 
-def milne_method(x0, y0, h, n):
-    results = [(round(x0, 4), round(y0, 4))]
-    for _ in range(3):
-        y0 = round(y0 + h * f(x0, y0), 4)
-        x0 = round(x0 + h, 4)
-        results.append((x0, y0))
+def milne_method(f, x0, y0, h, n):
+    # First 4 steps using Runge-Kutta to initialize
+    init_steps = runge_kutta_method(f, x0, y0, h, 3)
+    results = [(x0, y0)] + init_steps
+    
     output = []
     for i in range(3, n):
-        xp3, yp3 = results[i]
-        xp2, yp2 = results[i - 1]
-        xp1, yp1 = results[i - 2]
-        x0, y0 = results[i - 3]
-        y_predict = round(yp3 + (4 * h / 3) * (2 * f(xp3, yp3) - f(xp2, yp2) + 2 * f(xp1, yp1)), 4)
-        x_next = round(xp3 + h, 4)
-        f_predict = f(x_next, y_predict)
-        y_correct = round(yp3 + (h / 3) * (f(xp2, yp2) + 4 * f(xp3, yp3) + f_predict), 4)
-        results.append((x_next, y_correct))
-        output.append((x_next, y_predict, y_correct))
+        x3, y3 = results[i]
+        x2, y2 = results[i-1]
+        x1, y1 = results[i-2]
+        x0, y0 = results[i-3]
+        
+        # Predictor
+        y_pred = y0 + (4*h/3)*(2*f(x3,y3) - f(x2,y2) + 2*f(x1,y1))
+        x_new = x3 + h
+        
+        # Corrector
+        y_corr = y2 + (h/3)*(f(x2,y2) + 4*f(x3,y3) + f(x_new,y_pred))
+        
+        results.append((x_new, y_corr))
+        output.append((x_new, y_pred, y_corr))
     return output
 
-def adams_bashforth_method(x0, y0, h, n):
-    results = [(round(x0, 4), round(y0, 4))]
-    for _ in range(3):
-        y0 = round(y0 + h * f(x0, y0), 4)
-        x0 = round(x0 + h, 4)
-        results.append((x0, y0))
+def adams_bashforth_method(f, x0, y0, h, n):
+    # First 4 steps using Runge-Kutta to initialize
+    init_steps = runge_kutta_method(f, x0, y0, h, 3)
+    results = [(x0, y0)] + init_steps
+    
     output = []
     for i in range(3, n):
-        xn, yn = results[i]
-        xn1, yn1 = results[i - 1]
-        xn2, yn2 = results[i - 2]
-        xn3, yn3 = results[i - 3]
-        fn = f(xn, yn)
-        fn1 = f(xn1, yn1)
-        fn2 = f(xn2, yn2)
-        fn3 = f(xn3, yn3)
-        y_predict = round(yn + (h / 24) * (55 * fn - 59 * fn1 + 37 * fn2 - 9 * fn3), 4)
-        x_next = round(xn + h, 4)
-        f_predict = f(x_next, y_predict)
-        y_correct = round(yn + (h / 24) * (9 * f_predict + 19 * fn - 5 * fn1 + fn2), 4)
-        results.append((x_next, y_correct))
-        output.append((x_next, y_predict, y_correct))
+        x3, y3 = results[i]
+        x2, y2 = results[i-1]
+        x1, y1 = results[i-2]
+        x0, y0 = results[i-3]
+        
+        # Predictor
+        y_pred = y3 + (h/24)*(55*f(x3,y3) - 59*f(x2,y2) + 37*f(x1,y1) - 9*f(x0,y0))
+        x_new = x3 + h
+        
+        # Corrector
+        y_corr = y3 + (h/24)*(9*f(x_new,y_pred) + 19*f(x3,y3) - 5*f(x2,y2) + f(x1,y1))
+        
+        results.append((x_new, y_corr))
+        output.append((x_new, y_pred, y_corr))
     return output
 
 # ---------------------------------------------
@@ -98,7 +103,7 @@ def lagrange_interpolation(x_data, y_data, x_eval):
             if i != j:
                 term *= (x_eval - x_data[j]) / (x_data[i] - x_data[j])
         result += term
-    return round(result, 4)
+    return result
 
 def newton_divided_difference(x_data, y_data, x_eval):
     n = len(x_data)
@@ -115,7 +120,7 @@ def newton_divided_difference(x_data, y_data, x_eval):
         for k in range(j):
             term *= (x_eval - x_data[k])
         result += term
-    return round(result, 4)
+    return result
 
 def newton_forward_difference(x_data, y_data, x_eval):
     n = len(x_data)
@@ -134,9 +139,9 @@ def newton_forward_difference(x_data, y_data, x_eval):
         term = forward_diff[0][j]
         for k in range(j):
             term *= (u - k)
-        term /= math.factorial(j)  # Changed from np.math.factorial to math.factorial
+        term /= np.math.factorial(j)
         result += term
-    return round(result, 4)
+    return result
 
 def newton_backward_difference(x_data, y_data, x_eval):
     n = len(x_data)
@@ -155,9 +160,9 @@ def newton_backward_difference(x_data, y_data, x_eval):
         term = backward_diff[-1][j]
         for k in range(j):
             term *= (u + k)
-        term /= math.factorial(j)  # Changed from np.math.factorial to math.factorial
+        term /= np.math.factorial(j)
         result += term
-    return round(result, 4)
+    return result
 
 # ---------------------------------------------
 # Numerical Integration Methods
@@ -166,15 +171,15 @@ def trapezoidal_rule(f, a, b, n):
     h = (b - a) / n
     x = np.linspace(a, b, n+1)
     y = f(x)
-    return round(h * (0.5 * y[0] + 0.5 * y[-1] + np.sum(y[1:-1])), 4)
+    return h * (0.5 * y[0] + 0.5 * y[-1] + np.sum(y[1:-1]))
 
 def simpsons_13_rule(f, a, b, n):
     if n % 2 != 0:
-        n += 1
+        n += 1  # Simpson's rule requires even number of intervals
     h = (b - a) / n
     x = np.linspace(a, b, n+1)
     y = f(x)
-    return round(h/3 * (y[0] + y[-1] + 4 * np.sum(y[1:-1:2]) + 2 * np.sum(y[2:-2:2])), 4)
+    return h/3 * (y[0] + y[-1] + 4 * np.sum(y[1:-1:2]) + 2 * np.sum(y[2:-2:2]))
 
 def double_integration_trapezoidal(f, x0, xn, y0, yn, nx, ny):
     hx = (xn - x0) / nx
@@ -192,7 +197,7 @@ def double_integration_trapezoidal(f, x0, xn, y0, yn, nx, ny):
                 weight *= 0.5
             integral += weight * f(x, y)
     integral *= hx * hy
-    return round(integral, 4)
+    return integral
 
 def double_integration_simpsons(f, x0, xn, y0, yn, nx, ny):
     if nx % 2 != 0:
@@ -216,7 +221,7 @@ def double_integration_simpsons(f, x0, xn, y0, yn, nx, ny):
                 wy = 4 if j % 2 == 1 else 2
             integral += wx * wy * f(x, y)
     integral *= (hx * hy) / 9
-    return round(integral, 4)
+    return integral
 
 # ---------------------------------------------
 # Matrix Input Helper
@@ -228,10 +233,8 @@ def display_matrix_input(n, m, key_prefix):
         row = []
         for j in range(m):
             entry = cols[j].number_input(
-                f"{key_prefix} Row {i+1}, Col {j+1}", 
-                key=f"{key_prefix}{i}{j}",
-                format="%.4f")  # Changed to 4 decimal places
-            row.append(round(entry, 4))
+                f"{key_prefix} Row {i+1}, Col {j+1}", key=f"{key_prefix}{i}{j}")
+            row.append(entry)
         matrix.append(row)
     return np.array(matrix)
 
@@ -261,45 +264,60 @@ if section == "Numerical Solution of ODEs":
         ["Taylor Series Method", "Euler's Method", "Runge-Kutta Method (4th Order)",
          "Milne's Method (Predictor-Corrector)", "Adams-Bashforth Method (Predictor-Corrector)"])
 
-    x0 = st.sidebar.number_input("Initial x (x₀)", value=0.0, format="%.4f")
-    y0 = st.sidebar.number_input("Initial y (y₀)", value=1.0, format="%.4f")
-    h = st.sidebar.number_input("Step Size (h)", value=0.1, format="%.4f")
-    n = st.sidebar.number_input("Number of Steps (n)", value=10, step=1)
+    # ODE input
+    ode_expr = st.text_input("Enter ODE dy/dx = f(x, y)", "x + y", 
+                            help="Use Python syntax with x and y variables, e.g., x**2 + y, sin(x)*cos(y), etc.")
+    
+    # Initial conditions and parameters
+    col1, col2 = st.columns(2)
+    x0 = col1.number_input("Initial x (x₀)", value=0.0)
+    y0 = col2.number_input("Initial y (y₀)", value=1.0)
+    
+    col1, col2 = st.columns(2)
+    h = col1.number_input("Step Size (h)", value=0.1, format="%.4f")
+    n = col2.number_input("Number of Steps (n)", value=10, step=1)
 
-    if st.sidebar.button("🚀 Solve ODE"):
-        with st.spinner("Calculating..."):
-            if method == "Taylor Series Method":
-                results = taylor_series_method(x0, y0, h, int(n))
-                df = pd.DataFrame(results, columns=["x", "y"])
-            elif method == "Euler's Method":
-                results = euler_method(x0, y0, h, int(n))
-                df = pd.DataFrame(results, columns=["x", "y"])
-            elif method == "Runge-Kutta Method (4th Order)":
-                results = runge_kutta_method(x0, y0, h, int(n))
-                df = pd.DataFrame(results, columns=["x", "y"])
-            elif method == "Milne's Method (Predictor-Corrector)":
-                results = milne_method(x0, y0, h, int(n))
-                df = pd.DataFrame(results, columns=["x", "Predictor y", "Corrector y"])
-            elif method == "Adams-Bashforth Method (Predictor-Corrector)":
-                results = adams_bashforth_method(x0, y0, h, int(n))
-                df = pd.DataFrame(results, columns=["x", "Predictor y", "Corrector y"])
+    if st.button("🚀 Solve ODE"):
+        try:
+            f = get_ode_function(ode_expr)
+            
+            with st.spinner("Calculating..."):
+                if method == "Taylor Series Method":
+                    results = taylor_series_method(f, x0, y0, h, int(n))
+                    df = pd.DataFrame(results, columns=["x", "y"])
+                elif method == "Euler's Method":
+                    results = euler_method(f, x0, y0, h, int(n))
+                    df = pd.DataFrame(results, columns=["x", "y"])
+                elif method == "Runge-Kutta Method (4th Order)":
+                    results = runge_kutta_method(f, x0, y0, h, int(n))
+                    df = pd.DataFrame(results, columns=["x", "y"])
+                elif method == "Milne's Method (Predictor-Corrector)":
+                    results = milne_method(f, x0, y0, h, int(n))
+                    df = pd.DataFrame(results, columns=["x", "Predictor y", "Corrector y"])
+                elif method == "Adams-Bashforth Method (Predictor-Corrector)":
+                    results = adams_bashforth_method(f, x0, y0, h, int(n))
+                    df = pd.DataFrame(results, columns=["x", "Predictor y", "Corrector y"])
 
-            st.success("✅ Computation Completed!")
-            st.dataframe(df.style.format("{:.4f}"))
+                st.success("✅ Computation Completed!")
+                st.dataframe(df.style.format("{:.6f}"))
 
-            st.subheader("📈 Plot")
-            fig, ax = plt.subplots(figsize=(8, 5))
-            if "Predictor y" in df.columns:
-                ax.plot(df["x"], df["Predictor y"], 'bo--', label="Predictor")
-                ax.plot(df["x"], df["Corrector y"], 'gs-', label="Corrector")
-            else:
-                ax.plot(df["x"], df["y"], 'r-o', label="y(x)")
-            ax.legend()
-            ax.set_title(f"Solution using {method}")
-            ax.set_xlabel("x")
-            ax.set_ylabel("y", rotation=0)
-            ax.grid(True)
-            st.pyplot(fig)
+                st.subheader("📈 Plot")
+                fig, ax = plt.subplots(figsize=(8, 5))
+                if "Predictor y" in df.columns:
+                    ax.plot(df["x"], df["Predictor y"], 'bo--', label="Predictor")
+                    ax.plot(df["x"], df["Corrector y"], 'gs-', label="Corrector")
+                else:
+                    ax.plot(df["x"], df["y"], 'r-o', label="y(x)")
+                ax.legend()
+                ax.set_title(f"Solution of dy/dx = {ode_expr} using {method}")
+                ax.set_xlabel("x")
+                ax.set_ylabel("y")
+                ax.grid(True)
+                st.pyplot(fig)
+                
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+            st.error("Please check your ODE expression. Use valid Python syntax with x and y variables.")
 
 # =============================================
 # Equation Solving and Eigenvalue Section
@@ -317,8 +335,8 @@ elif section == "Equations & Eigenvalue Problems":
 
     if method == "Newton-Raphson Method":
         expr = st.text_input("Enter function f(x)", "x**2 - 2")
-        x0 = st.number_input("Initial guess x₀", value=1.0, format="%.4f")
-        tol = st.number_input("Tolerance", value=1e-6, format="%.4e")
+        x0 = st.number_input("Initial guess x₀", value=1.0)
+        tol = st.number_input("Tolerance", value=1e-6, format="%e")
         max_iter = st.number_input("Max iterations", value=100, step=10)
         if st.button("🔍 Find Root"):
             try:
@@ -336,7 +354,7 @@ elif section == "Equations & Eigenvalue Problems":
                         break
                     x1 = x0 - fx / fpx
                     if abs(x1 - x0) < tol:
-                        st.success(f"Root found: {x1:.8f} in {i+1} iterations")
+                        st.success(f"Root found: {x1:.6f} in {i+1} iterations")
                         break
                     x0 = x1
                 else:
@@ -357,7 +375,7 @@ elif section == "Equations & Eigenvalue Problems":
                 if method == "Gauss Elimination":
                     x = np.linalg.solve(A, b)
                     st.success("Solution Vector x:")
-                    st.write(np.round(x, 4))
+                    st.write(x)
                 elif method == "Gauss-Jordan Elimination":
                     Ab = np.hstack([A, b])
                     Ab = Ab.astype(float)
@@ -369,7 +387,7 @@ elif section == "Equations & Eigenvalue Problems":
                                 Ab[j] = Ab[j] - Ab[j, i] * Ab[i]
                     x = Ab[:, -1]
                     st.success("Solution Vector x:")
-                    st.write(np.round(x, 4))
+                    st.write(x)
                 elif method == "Gauss-Seidel Iterative":
                     x = np.zeros_like(b)
                     for _ in range(100):
@@ -382,7 +400,7 @@ elif section == "Equations & Eigenvalue Problems":
                             break
                         x = x_new
                     st.success("Solution Vector x:")
-                    st.write(np.round(x, 4))
+                    st.write(x)
                 elif method == "Power Method (Eigenvalues)":
                     x = np.ones((int(n), 1))
                     for _ in range(100):
@@ -392,9 +410,9 @@ elif section == "Equations & Eigenvalue Problems":
                             break
                         x = x_next
                     eigenvalue = float((x.T @ A @ x) / (x.T @ x))
-                    st.success(f"Dominant Eigenvalue: {eigenvalue:.8f}")
+                    st.success(f"Dominant Eigenvalue: {eigenvalue:.6f}")
                     st.write("Corresponding Eigenvector:")
-                    st.write(np.round(x, 4))
+                    st.write(x)
             except Exception as e:
                 st.error(f"Error: {e}")
 
@@ -419,12 +437,12 @@ elif section == "Interpolation Methods":
     y_data = []
     cols = st.columns(2)
     for i in range(n):
-        x = cols[0].number_input(f"x_{i}", value=float(i), key=f"x_{i}", format="%.4f")
-        y = cols[1].number_input(f"y_{i}", value=float(i**2), key=f"y_{i}", format="%.4f")
-        x_data.append(round(x, 4))
-        y_data.append(round(y, 4))
+        x = cols[0].number_input(f"x_{i}", value=float(i), key=f"x_{i}")
+        y = cols[1].number_input(f"y_{i}", value=float(i**2), key=f"y_{i}")
+        x_data.append(x)
+        y_data.append(y)
     
-    x_eval = st.number_input("Point to evaluate (x)", value=round((x_data[0] + x_data[-1])/2, 4), format="%.4f")
+    x_eval = st.number_input("Point to evaluate (x)", value=(x_data[0] + x_data[-1])/2)
     
     if st.button("🚀 Interpolate"):
         with st.spinner("Calculating..."):
@@ -437,7 +455,7 @@ elif section == "Interpolation Methods":
             elif method == "Newton's Backward Difference":
                 result = newton_backward_difference(x_data, y_data, x_eval)
             
-            st.success(f"Interpolated value at x = {x_eval:.4f}: *{result:.8f}*")
+            st.success(f"Interpolated value at x = {x_eval}: *{result:.6f}*")
             
             # Plotting
             x_plot = np.linspace(min(x_data), max(x_data), 100)
@@ -455,7 +473,7 @@ elif section == "Interpolation Methods":
             fig, ax = plt.subplots(figsize=(8, 5))
             ax.plot(x_data, y_data, 'ro', label="Data Points")
             ax.plot(x_plot, y_plot, 'b-', label="Interpolation")
-            ax.plot(x_eval, result, 'gs', label=f"Interpolated Point ({x_eval:.4f}, {result:.4f})")
+            ax.plot(x_eval, result, 'gs', label=f"Interpolated Point ({x_eval:.2f}, {result:.2f})")
             ax.legend()
             ax.set_title(f"{method}")
             ax.grid(True)
@@ -479,8 +497,8 @@ elif section == "Numerical Integration":
         st.markdown("### Enter Function f(x)")
         func_expr = st.text_input("Function (use Python syntax, e.g., x*2 + np.sin(x))", "x*2")
         
-        a = st.number_input("Lower limit (a)", value=0.0, format="%.4f")
-        b = st.number_input("Upper limit (b)", value=1.0, format="%.4f")
+        a = st.number_input("Lower limit (a)", value=0.0)
+        b = st.number_input("Upper limit (b)", value=1.0)
         n = st.number_input("Number of intervals (n)", min_value=1, value=100)
         
         if st.button("🚀 Integrate"):
@@ -491,7 +509,7 @@ elif section == "Numerical Integration":
                 elif "Simpson's" in method:
                     result = simpsons_13_rule(f, a, b, int(n))
                 
-                st.success(f"Integral result: *{result:.8f}*")
+                st.success(f"Integral result: *{result:.6f}*")
                 
                 # Plotting
                 x_plot = np.linspace(a, b, 1000)
@@ -511,10 +529,10 @@ elif section == "Numerical Integration":
         st.markdown("### Enter Function f(x, y)")
         func_expr = st.text_input("Function (e.g., x*2 + y2)", "x2 + y*2")
         
-        x0 = st.number_input("x lower limit (x0)", value=0.0, format="%.4f")
-        xn = st.number_input("x upper limit (xn)", value=1.0, format="%.4f")
-        y0 = st.number_input("y lower limit (y0)", value=0.0, format="%.4f")
-        yn = st.number_input("y upper limit (yn)", value=1.0, format="%.4f")
+        x0 = st.number_input("x lower limit (x0)", value=0.0)
+        xn = st.number_input("x upper limit (xn)", value=1.0)
+        y0 = st.number_input("y lower limit (y0)", value=0.0)
+        yn = st.number_input("y upper limit (yn)", value=1.0)
         nx = st.number_input("x intervals (nx)", min_value=1, value=10)
         ny = st.number_input("y intervals (ny)", min_value=1, value=10)
         
@@ -526,7 +544,7 @@ elif section == "Numerical Integration":
                 elif "Simpson's" in method:
                     result = double_integration_simpsons(f, x0, xn, y0, yn, int(nx), int(ny))
                 
-                st.success(f"Double Integral result: *{result:.8f}*")
+                st.success(f"Double Integral result: *{result:.6f}*")
             except Exception as e:
                 st.error(f"Error: {e}")
 
